@@ -1,0 +1,545 @@
+---
+output:
+  html_document:
+    df_print: paged
+---
+
+# FE590.  Assignment #4.
+
+
+## Enter Your Name Here, or "Anonymous" if you want to remain anonymous..
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+I pledge on my honor that I have not given or received any unauthorized assistance on this assignment/examination. I further pledge that I have not copied any material from a book, article, the Internet or any other source except where I have expressly cited the source.
+
+By filling out the following fields, you are signing this pledge.  No assignment will get credit without being pledged.
+
+Name:Chunli Liu
+
+CWID:10430963
+
+Date:11/8/2019
+
+# Instructions
+
+
+When you have completed the assignment, knit the document into a PDF file, and upload _both_ the .pdf and .Rmd files to Canvas.
+
+Note that you must have LaTeX installed in order to knit the equations below.  If you do not have it installed, simply delete the questions below.
+```{r}
+CWID = 10430963 #Place here your Campus wide ID number, this will personalize
+#your results, but still maintain the reproduceable nature of using seeds.
+#If you ever need to reset the seed in this assignment, use this as your seed
+#Papers that use -1 as this CWID variable will earn 0's so make sure you change
+#this value before you submit your work.
+personal = CWID %% 10000
+set.seed(personal)
+```
+# Question 1:
+In this assignment, you will be required to find a set of data to run regression on.  This data set should be financial in nature, and of a type that will work with the models we have discussed this semester (hint: we didn't look at time series)  You may not use any of the data sets in the ISLR package that we have been looking at all semester.  Your data set that you choose should have both qualitative and quantitative variables. (or has variables that you can transform)
+
+Provide a description of the data below, where you obtained it, what the variable names are and what it is describing.
+
+# Question 2:
+Pick a quantitative variable and fit at least four different models in order to predict that variable using the other predictors.  Determine which of the models is the best fit.  You will need to provide strong reasons as to why the particular model you chose is the best one.  You will need to confirm the model you have selected provides the best fit and that you have obtained the best version of that particular model (i.e. subset selection or validation for example).  You need to convince the grader that you have chosen the best model.
+```{r}
+##Question 1
+## the data set is named as German Credit Risk, origns from Kaggle, I downloaded the data set and load it from my PC
+## load the data
+
+url <- "D:\\2019 fall\\FE 590\\assignment-4\\german_credit_data.csv"
+## use the options as.is = TRUE, and na.strings="?". Remove the unavailable data
+data1=read.table(url,header=T,na.strings="NA",as.is = TRUE,fill = TRUE,sep = ",")
+data1<-na.omit(data1)
+## there is no unavailable data
+sum(is.na(data1))
+
+## number of row and column
+dim(data1)
+
+## take a look of the dataset
+head(data1)
+
+## we could see that the data set contains both quantative and qualitative variables as request
+str(data1)
+
+## the description of each variable
+
+#1.Age (numeric): the age of observations
+#2.Sex (text: male, female): gender of observations
+#3.Job (numeric: 0 - unskilled and non-resident, 1 - unskilled and resident, 2 - skilled, 3 - highly skilled): level of job of observations
+#4.Housing (text: own, rent, or free)
+#5.Saving accounts (text - little, moderate, quite rich, rich): conditions of Saving accounts
+#6.Checking account (numeric, in DM - Deutsch Mark): conditions of Checking accounts
+#7.Credit amount (numeric, in DM)
+#8.Duration (numeric, in month): duration in month
+#9.Purpose (text: car, furniture/equipment, radio/TV, domestic appliances, repairs, education, business, vacation/others): purpose of purchasing
+
+##Question 2: Pick a quantitative variable and fit at least four different models 
+
+## log the variable which is pretty large
+data1$Credit.amount = log(data1$Credit.amount) 
+attach(data1)
+
+## split the data set
+sample_size = floor(0.5*nrow(data1))
+picked = sample(seq_len(nrow(data1)),size = sample_size)
+
+## train data set
+train =data1[picked,]
+
+## test data set
+test = data1[-picked,]
+
+
+##fit linear regression we could see that the important predictors based on Credit.amount are Job, duation. but the Purpose may also make sense because the p-value of Purposerepairs and Purposevacation/others is low.
+
+fit.lm = lm(Credit.amount~.-X, data = train)
+plot(fit.lm)
+summary(fit.lm)
+
+
+## now let's see the MSE of linear regression (0.3470)
+fit.pred = predict(fit.lm, test)
+lm.fit.err = mean((test$Credit.amount - fit.pred)^2)
+lm.fit.err
+
+## next I would like to use the logistic model to fit the data set
+fit.glm = glm(Credit.amount~.-X, data = train)
+plot(fit.glm)
+summary(fit.glm)
+## from the summary of the logistic regression model I learn that there are two important predictors according to Credit.amount : Job, Duration and Purpose, just like linear regression model shows
+
+## the MSE oflogistic regression, same as linear regression
+fit.pred = predict(fit.glm, test)
+glm.fit.err = mean((test$Credit.amount - fit.pred)^2)
+glm.fit.err
+
+
+## fit the gam model
+install.packages("gam",repos = "http://cran.us.r-project.org")
+library(gam)
+gam.fit = gam(Credit.amount~ns(Job,5)+ns(Duration, 5)+Purpose+Sex+Housing + Saving.accounts + Checking.account,data = train)
+
+## plotting the model
+par(mfrow=c(1,3)) #to partition the Plotting Window
+plot(gam.fit,se = TRUE,col = "red" )
+
+## (c)Evaluate the model obtained on the test set
+gam.pred = predict(gam.fit, test)
+gam.err = mean((test$Credit.amount - gam.pred)^2)
+
+gam.tss = mean((test$Credit.amount - mean(test$Credit.amount))^2)
+test.rss = 1 - gam.err/gam.tss
+test.rss
+
+## the test error rate (0.4641)
+cat("the results produced a R squre value of", test.rss)
+
+## gam model only agree that Duration is the most important feature and also admit Purpose may also need to be considered
+summary(gam.fit)
+
+## conclusions: linear regression, glm model perform same including the accuracy rate and important predictors, gam model is worse than them in accuracy rate and have slight difference in selecting important predictors.
+
+##  Now I decide to make dummy data to see if things go differently by using both qualititive and quantitative response because there are 5/9 of category features in my data set.
+
+##quantitative response by performing tree model, linear regression,glm and gam model, plus hierarchical clustering.
+
+a <- sub("free","1",data1$Housing)
+b <- sub("own","2",a)
+c <-sub("rent","3",b)
+data1$Housing <- c
+data1$Housing <- as.numeric(as.character(data1$Housing))
+typeof(data1$Housing)
+
+## convert variable names Credit.Savings
+
+credit.savings.factor = factor(data1$Saving.accounts);
+as.character(credit.savings.factor)
+data1$Saving.accounts = as.numeric(credit.savings.factor)
+typeof(data1$Saving.accounts)
+
+## convert variable names Credit.checkings
+
+d <- sub("little","1",data1$Checking.account)
+e <- sub("moderate","2",d)
+f <-sub("rich","3",e)
+data1$Checking.account <- f
+data1$Checking.account <- as.numeric(as.character(data1$Checking.account))
+typeof(data1$Checking.account)
+
+## convert variable names Purpose
+table(data1$Purpose)
+purpose.factor = factor(data1$Purpose);
+as.character(purpose.factor)
+data1$Purpose = as.numeric(purpose.factor)
+typeof(data1$Purpose)
+
+## convert the Sex
+##data1<-na.omit(data1)
+table(data1$Sex)
+sex.factor = factor(data1$Sex)
+as.character(sex.factor)
+data1$Sex = as.numeric(sex.factor)
+typeof(data1$Sex)
+
+
+## (1) performing perform tree model
+attach(data1)
+install.packages("tree",repos = "http://cran.us.r-project.org")
+library(tree)
+tree.data = tree(Credit.amount~.-X,data1)
+summary(tree.data)
+## as I could see through the summary that the variables actually used in tree is Duration and Job
+## plot the decision tree
+plot(tree.data )
+text(tree.data ,pretty =0)
+
+## obtain the MSE: 0.3218
+
+sample_size = floor(0.5*nrow(data1))
+picked = sample(seq_len(nrow(data1)),size = sample_size)
+
+## train data set
+train1 =data1[picked,]
+
+## test data set
+test1 = data1[-picked,]
+
+pred.tree = predict(tree.data, newdata = test1)
+MSE = mean((pred.tree - test1$Credit.amount)^2)
+cat("the MSE of decision tree is: " , MSE)
+
+## (2) performing linear regression : important features are Job,Duration and Purpose, the MSE: 0.3636
+fit.lm2 = lm(Credit.amount~.-X, data = train1)
+plot(fit.lm2)
+summary(fit.lm2)
+
+## the MSE of linear regression is 0.3636
+fit.pred2 = predict(fit.lm2, test1)
+lm.fit.err2 = mean((test1$Credit.amount - fit.pred2)^2)
+lm.fit.err2
+
+## (3)performing logistic model: important features are Job,Duration and Purpos
+## the MSE: 0.3636
+fit.glm2 = glm(Credit.amount~.-X, data = train1)
+plot(fit.glm2)
+summary(fit.glm2)
+
+fit.pred3 = predict(fit.glm2, test1)
+glm.fit.err3 = mean((test1$Credit.amount - fit.pred3)^2)
+glm.fit.err3
+
+## conslusion: the MSE of linear regression and logistic regression is same, also the important features are same.
+
+## (4)performing a gam model by using features select before
+gam.fit2 = gam(Credit.amount~ ns(Job,5)+ns(Duration, 5)+ns(Purpose,5),data = train1)
+
+## plotting the model
+par(mfrow=c(1,3)) #to partition the Plotting Window
+plot(gam.fit2,se = TRUE,col = "red" )
+
+## gam model test error rate: 0.4347, comparing to the former data set, the GAMS model performs worse on dummy data
+gam.pred1 = predict(gam.fit2, test1)
+gam.err1 = mean((test1$Credit.amount - gam.pred1)^2)
+
+gam.tss1 = mean((test1$Credit.amount - mean(test1$Credit.amount))^2)
+test.rss1 = 1 - gam.err1/gam.tss1
+test.rss1
+
+cat("the results produced a R squre value of", test.rss1)
+
+
+## after modifying the data set, the performance of linear regression and logistic regression model doesn't improved significantly, gam model perform a little better on dummy data set, improved from 0.46 to 0.43, but it may also be worse after running for couple of times.so far, the decision tree perform best, accuracy is 68%, let's keep moving with more models.
+
+## (5)perform random forest
+
+install.packages("randomForest",repos = "http://cran.us.r-project.org")
+library(randomForest)
+
+## build 500 of trees, the mean of squared residual is  0.33 and 45.13% var explained
+bag.credit <- randomForest(Credit.amount ~ ., data = train1,mtry = 9,importance = TRUE)
+bag.credit
+
+## the MSE of randomforest, is 0.4034, worse than decison tree,linear regression and regression regression, but better than GAMs
+predict.bag <- predict(bag.credit, newdata = test1)
+mean((predict.bag - test1$Credit.amount)^2)
+
+## let's see the importance of each feature: Duration is the most important one, then is the Job and purpose, consistent with all the other models so far.
+importance(bag.credit)
+varImpPlot(bag.credit)
+
+## (6)perform hierarchical clustering: it doesn't need a response as required, but I am want to try this model.
+
+hc.complete <- hclust(dist(data1), method = "complete")
+
+## now plot the dendrograms obtained using the usual plot() function, The numbers at the bottom of the plot identify each observation.
+plot(hc.complete)
+
+##determine the cluster labels for each observation associated with a given cut of the dendrogram by cutree() function:
+cutree(hc.complete, 3)
+
+sd.data <- scale(data1)
+hc.complete.sd <- hclust(dist(sd.data), method = "complete")
+
+plot(hc.complete.sd)
+cutree(hc.complete.sd, 3)
+
+table(cutree(hc.complete, 3), cutree(hc.complete.sd, 3))
+table(cutree(hc.complete, 2), cutree(hc.complete.sd, 2))
+
+##(7) performing subset selection model
+install.packages("leaps",repos = "http://cran.us.r-project.org")
+library(leaps)
+## output indicates that the best two-variable model contains only Duration and job
+regfit.full=regsubsets (Credit.amount~.,data1 )
+summary (regfit.full)
+
+## fit up to a 9-variable model.
+regfit.full2=regsubsets (Credit.amount~.,data1,nvmax = 19)
+reg.summary = summary (regfit.full2)
+
+names(reg.summary)
+
+## we see that the R2 statistic increases from 42%, when only one variable is included in the model, to almost 48 %, when all variables are included. As expected, the R2 statistic increases monotonically as more variables are included.
+reg.summary$rsq
+
+## Plotting RSS, adjusted R2, Cp, and BIC for all of the models at once will help me decide which model to select
+par(mfrow =c(2,2))
+plot(reg.summary$rss ,xlab=" Number of Variables ",ylab=" RSS",
+type="l")
+plot(reg.summary$adjr2 ,xlab =" Number of Variables ",
+ylab=" Adjusted RSq",type="l")
+
+max1 = which.max (reg.summary$adjr2)
+
+## We will now plot a red dot to indicate the model with the largest adjusted R2 statistic.
+points (max1, reg.summary$adjr2[max1], col ="red",cex =2, pch =20)
+
+## In a similar fashion we can plot the Cp and BIC statistics, and indicate the models with the smallest statistic using which.min().
+plot(reg.summary$cp ,xlab =" Number of Variables ",ylab="Cp",
+type='l')
+min1 = which.min (reg.summary$cp )
+points (min1, reg.summary$cp [min1], col ="red",cex =2, pch =20)
+
+min2 = which.min (reg.summary$bic )
+plot(reg.summary$bic ,xlab=" Number of Variables ",ylab=" BIC",
+type='l')
+points (min2, reg.summary$bic [min2], col =" red",cex =2, pch =20)
+
+plot(regfit.full,scale ="r2")
+plot(regfit.full,scale ="adjr2")
+plot(regfit.full,scale ="Cp")
+plot(regfit.full,scale ="bic")
+
+## the model with the lowest BIC is the two-variable model that contains only Duration and Job
+## coefficient estimates associated with this model.
+coef(regfit.full,2)
+```
+#Question 3:
+
+Do the same approach as in question 2, but this time for a qualitative variable.
+```{r}
+
+## For qualitative variable, I would like to create a qualitative variable based on Credit.amount named High("yes","no") which I think is proficient to predict the Credit risk
+
+## Performing tree model, hierarchical clustering, LDA,QDA and Resampling method(K-Fold across-validation)
+
+## (1) perform decision tree
+High=ifelse (Credit.amount <=7," No"," Yes ")
+data1 = data.frame(data1,High)
+attach(data1)
+tree.credit =tree(High~.-Credit.amount,data1)
+summary (tree.credit)
+## through the result of summary, I learnt that the training error rate is 13% and the variables actually used in tree construction is Duration, Job and Age
+
+## plot the tree
+plot(tree.credit)
+text(tree.credit ,pretty =0)
+tree.credit
+## compute the test error rate
+train3=sample (1: nrow(data1), 200)
+data1.test=data1[-train3,]
+High.test=High[-train3 ]
+
+tree.credit =tree(High~.-Credit.amount,data1 ,subset =train3 )
+tree.credit.pred=predict (tree.credit ,data1.test,type ="class")
+table.credit = table(tree.credit.pred,High.test)
+
+## according to the table, This approach leads to incorrect predictions below, is 18.3%
+1-sum(diag(table.credit))/sum(table.credit)
+
+
+## (2)implementing hierarchical clustering
+data_set <- subset(data1, select = -c(High))
+hc.complete2 <- hclust(dist(data_set), method = "complete")
+
+## now plot the dendrograms obtained using the usual plot() function, The numbers at the bottom of the plot identify each observation.
+plot(hc.complete2)
+
+##determine the cluster labels for each observation associated with a given cut of the dendrogram by cutree() function:
+cutree(hc.complete2, 3)
+
+sd.data2 <- scale(data_set)
+hc.complete.sd2 <- hclust(dist(sd.data2), method = "complete")
+
+plot(hc.complete.sd2)
+cutree(hc.complete.sd2, 3)
+
+## ## if dividing into two clusters, the rate of each cluster is 9% and 47%
+## if dividing innto three clusters, the rate of each cluster 9%, 28% and 0.5%
+## I think cluster = 2 is good, for cluster = 3, the rate of label 3 is only 0.5 % but the rate of label 2 is much lower than label 2 than cluster = 2, it means high error rate exist 
+table(cutree(hc.complete2, 3), cutree(hc.complete.sd2, 3))
+table(cutree(hc.complete2, 2), cutree(hc.complete.sd2, 2))
+
+## (3)fit the logistic model important predictors found in the last step: Duration,Job and Age
+sample_size = floor(0.5*nrow(data1))
+picked = sample(seq_len(nrow(data1)),size = sample_size)
+train2 =data1[picked,]
+test2 = data1[-picked,]
+
+## (4)perform LDA on data set
+install.packages("MASS",repos = "http://cran.us.r-project.org")
+library(MASS)
+lda.fit=lda(High~Duration+Job+Age,data=train2)
+
+## from the lda.fit I learnt that the coefficients of linear discrimnants for Duration, Job and Age is 0.079, 0.49 annd 0.01. all of the three is relation to credit risk(high or low)
+plot(lda.fit)
+
+## compute the error rate of LDA on test data set, is 18.77%
+lda.pred = predict(lda.fit, newdata=test2, type="response")
+lda.class = lda.pred$class
+tab1<-table(lda.class, test2$High)
+
+print(paste0("the error rate is:",1 - sum(diag(tab1))/sum(tab1)))
+
+## (5)repeat using QDA, the test error rate of QDA is 18%
+qda.fit = qda(High~Duration+Job+Age, data= train2)
+qda.fit
+
+qda.pred = predict(qda.fit, newdata=test2, type="response")
+qda.class = qda.pred$class
+tab2<-table(qda.class, test2$High)
+
+print(paste0("the error rate is:",1 - sum(diag(tab2))/sum(tab2)))
+
+## (6) performing subset selection model
+install.packages("leaps", repos = "http://cran.us.r-project.org")
+library (leaps)
+## output indicates that the best two-variable model contains only Duration and job
+regfit.full=regsubsets (High~.-Credit.amount,data1 )
+summary (regfit.full)
+
+## fit up to a 9-variable model.
+regfit.full=regsubsets (High~.-Credit.amount,data1,nvmax = 19)
+reg.summary = summary (regfit.full)
+
+names(reg.summary)
+
+## we see that the R2 statistic increases from 12%, when only one variable is included in the model, to almost 15 %, when all variables are included. As expected, the R2 statistic increases monotonically as more variables are included.
+reg.summary$rsq
+
+## Plotting RSS, adjusted R2, Cp, and BIC for all of the models at once will help me decide which model to select
+par(mfrow =c(2,2))
+plot(reg.summary$rss ,xlab=" Number of Variables ",ylab=" RSS",
+type="l")
+plot(reg.summary$adjr2 ,xlab =" Number of Variables ",
+ylab=" Adjusted RSq",type="l")
+
+max1 = which.max (reg.summary$adjr2)
+
+## We will now plot a red dot to indicate the model with the largest adjusted R2 statistic.
+points (max1, reg.summary$adjr2[max1], col ="red",cex =2, pch =20)
+
+## In a similar fashion we can plot the Cp and BIC statistics, and indicate the models with the smallest statistic using which.min().
+plot(reg.summary$cp ,xlab =" Number of Variables ",ylab="Cp",
+type='l')
+min1 = which.min (reg.summary$cp )
+points (min1, reg.summary$cp [min1], col ="red",cex =2, pch =20)
+
+min2 = which.min (reg.summary$bic )
+plot(reg.summary$bic ,xlab=" Number of Variables ",ylab=" BIC",
+type='l')
+points (min2, reg.summary$bic [min2], col =" red",cex =2, pch =20)
+
+plot(regfit.full ,scale ="r2")
+plot(regfit.full ,scale ="adjr2")
+plot(regfit.full ,scale ="Cp")
+plot(regfit.full ,scale ="bic")
+
+## the model with the lowest BIC is the two-variable model that contains only Duration and Job
+## coefficient estimates associated with this model.
+coef(regfit.full ,2)
+
+
+## final conclusion:
+## to predict the Credit risk, I use the Credit amount as the quantitative predictor  because I think the higher of credit amount, the high risk of credit. then I perform linear regression, logistic regression, GAMs, tree model and subset selection model to prove that the most two features deciding credit amount are Duration and Job, decisin tree performs best since the error rate is 32.18%, GAMs performs worst, linear regression and logistic model ia the same. Then I use High as qualitative response since it is classified as(yes OR no) to decide if the credit risk is high or not, I perform decision tree, logistic regression, LDA,QDA and subset selection model to prove that the most two features deciding High are Duration and Job, the decision QDA performs best, then is the tree model and LDA.
+
+## others to say, maybe thing will change when I use other variables pattern and split the data differently.
+
+## the results I get is that the longer duration and more skilled tha job is, the credit risk is higher. The variable named Purpose also make sense because more expensive thing they buy(for example: education, vacation), the higher credit risk is.
+
+```
+#Question 4:
+
+(Based on ISLR Chapter 9 #7) In this problem, you will use support vector approaches in order to predict whether a given car gets high or low gas mileage based on the Auto data set.
+
+##(a)
+Create a binary variable that takes on a 1 for cars with gas mileage above the median, and a 0 for cars with gas mileage below the median.
+
+##(b)
+Fit a support vector classifier to the data with various values of cost, in order to predict whether a car gets high or low gas mileage. Report the cross-validation errors associated with different values of this parameter. Comment on your results.
+
+##(c)
+Now repeat for (b), this time using SVMs with radial and polynomial basis kernels, with different values of gamma and degree and cost. Comment on your results.
+
+##(d)
+Make some plots to back up your assertions in (b) and (c). Hint: In the lab, we used the plot() function for svm objects only in cases with p=2 When p>2,you can use the plot() function to create plots displaying pairs of variables at a time. Essentially, instead of typing plot(svmfit , dat) where svmfit contains your fitted model and dat is a data frame containing your data, you can type plot(svmfit , dat, x1~x4) in order to plot just the first and fourth variables. However, you must replace x1 and x4 with the correct variable names. To find out more, type ?plot.svm.
+
+```{r}
+##(a) Create a binary variable that takes on a 1 for cars with gas mileage above the median, and a 0 for cars with gas mileage below the median.
+##require(ISLR); 
+
+install.packages('e1071', dependencies=TRUE,repos = "http://cran.us.r-project.org")
+library(e1071)
+library(ISLR)
+data(Auto)
+var <- ifelse(Auto$mpg > median(Auto$mpg), 1, 0)
+Auto$mpglevel <- as.factor(var)
+
+## (b)Fit a support vector classifier to the data with various values of cost, in order to predict whether a car gets high or low gas mileage. Report the cross-validation errors associated with different values of this parameter. Comment on your results.
+
+tune.out <- tune(svm, mpglevel ~ ., data = Auto, kernel = "linear", ranges = list(cost = c(0.01, 0.1, 1, 5, 10, 100, 1000)))
+summary(tune.out)
+## A cost of 1 seems to perform best.
+
+##(c) Now repeat for (b), this time using SVMs with radial and polynomial basis kernels, with different values of gamma and degree and cost. Comment on your results.
+tune.out <- tune(svm, mpglevel ~ ., data = Auto, kernel = "polynomial", ranges = list(cost = c(0.01, 0.1, 1, 5, 10, 100), degree = c(2, 3, 4)))
+summary(tune.out)
+## For a polynomial kernel, the lowest cross-validation error is obtained for a degree of 2 and a cost of 100.
+
+tune.out <- tune(svm, mpglevel ~ ., data = Auto, kernel = "radial", ranges = list(cost = c(0.01, 0.1, 1, 5, 10, 100), gamma = c(0.01, 0.1, 1, 5, 10, 100)))
+summary(tune.out)
+## For a radial kernel, the lowest cross-validation error is obtained for a gamma of 0.01 and a cost of 100.
+
+
+##(d) Make some plots to back up your assertions in (b) and (c). Hint: In the lab, we used the plot() function for svm objects only in cases with p=2 When p>2,you can use the plot() function to create plots displaying pairs of variables at a time. Essentially, instead of typing plot(svmfit , dat) where svmfit contains your fitted model and dat is a data frame containing your data, you can type plot(svmfit , dat, x1~x4) in order to plot just the first and fourth variables. However, you must replace x1 and x4 with the correct variable names. To find out more, type ?plot.svm.
+svm.linear <- svm(mpglevel ~ ., data = Auto, kernel = "linear", cost = 1)
+svm.poly <- svm(mpglevel ~ ., data = Auto, kernel = "polynomial", cost = 100, degree = 2)
+svm.radial <- svm(mpglevel ~ ., data = Auto, kernel = "radial", cost = 100, gamma = 0.01)
+plotpairs = function(fit) {
+    for (name in names(Auto)[!(names(Auto) %in% c("mpg", "mpglevel", "name"))]) {
+        plot(fit, Auto, as.formula(paste("mpg~", name, sep = "")))
+    }
+}
+plotpairs(svm.linear)
+
+plotpairs(svm.poly)
+
+plotpairs(svm.radial)
+
+
+
+```
+
